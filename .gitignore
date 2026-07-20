@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Database
+*.sqlite
+*.sqlite3
+*.db
+
+# Build output
+dist/
+build/
+
+# Personal / local-only config (installer-managed, regenerated per machine)
+.claude/settings.local.json
+_bmad/config.user.toml
+*.user.toml
+
+# OS
+.DS_Store
