@@ -87,3 +87,79 @@ authRouter.post('/register', async (req: Request, res: Response) => {
     return res.status(500).json(fail('internal server error'));
   }
 });
+
+/**
+ * The single generic credential-rejection message (AD-8 / AD-13, Story 1.2 AC2).
+ *
+ * Returned verbatim for BOTH an unknown email AND a wrong password, so the response
+ * never reveals whether an account exists for the submitted email. Keeping it as one
+ * constant guarantees the two failure paths are byte-for-byte identical.
+ */
+const INVALID_CREDENTIALS_MESSAGE = 'invalid email or password';
+
+/**
+ * A precomputed hash of an unguessable placeholder, compared against when no user is
+ * found for the submitted email (see the /login handler below).
+ *
+ * An identical error message is not enough on its own: `bcrypt.compare` is
+ * deliberately slow (~100ms+), so skipping it entirely for an unknown email — the
+ * short-circuit `!user || ...` would otherwise do — makes that case return orders of
+ * magnitude faster than a wrong-password case, letting an attacker enumerate
+ * registered emails purely by response time (CWE-208). Comparing against this dummy
+ * hash even when no user exists keeps both failure paths doing the same bcrypt work.
+ */
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync('no-such-user-timing-safety-placeholder', SALT_ROUNDS);
+
+authRouter.post('/login', async (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body ?? {};
+
+    // Validate required fields present (→ 400). Format is not re-checked here: an
+    // invalid email simply won't match any row and falls through to the generic 401.
+    if (typeof email !== 'string' || typeof password !== 'string') {
+      return res.status(400).json(fail('email and password are required'));
+    }
+
+    const trimmedEmail = email.trim();
+
+    if (!trimmedEmail || !password) {
+      return res.status(400).json(fail('email and password are required'));
+    }
+
+    // Look up the user by email (AD-6: query Drizzle directly).
+    const user = db
+      .select({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        password: users.password,
+      })
+      .from(users)
+      .where(eq(users.email, trimmedEmail))
+      .get();
+
+    // Unknown email AND bad password both return the SAME generic 401 — no branch,
+    // and no *timing*, reveals which case occurred (Story 1.2 AC2). bcrypt.compare
+    // always runs, against the real hash when the user exists or DUMMY_PASSWORD_HASH
+    // when they don't, so both paths do the same amount of work.
+    const passwordMatches = await bcrypt.compare(password, user ? user.password : DUMMY_PASSWORD_HASH);
+
+    if (!user || !passwordMatches) {
+      return res.status(401).json(fail(INVALID_CREDENTIALS_MESSAGE));
+    }
+
+    const token = await signToken({ userId: user.id });
+
+    // Canonical Auth DTO (AD-13) — field-for-field identical to register's response;
+    // `password` is deliberately absent.
+    return res.status(200).json(
+      ok({
+        token,
+        user: { id: user.id, email: user.email, name: user.name },
+      }),
+    );
+  } catch (err) {
+    console.error('POST /api/auth/login failed:', err);
+    return res.status(500).json(fail('internal server error'));
+  }
+});
