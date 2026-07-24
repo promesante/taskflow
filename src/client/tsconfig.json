@@ -1,10 +1,12 @@
 {
   "compilerOptions": {
     "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "lib": ["ES2022"],
-    "types": ["node"],
+    "types": [],
+    "jsx": "react-jsx",
     "strict": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
@@ -12,11 +14,15 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
     "noEmit": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "paths": {
+      "@/*": ["./*"]
+    }
   },
-  "include": ["src/**/*.ts", "drizzle.config.ts"],
-  "exclude": ["node_modules", "src/client"]
+  "include": ["main.tsx", "App.tsx", "vite-env.d.ts", "components", "hooks", "lib"]
 }
